@@ -154,6 +154,10 @@ if (params.run_fermikit) {
         """
     }
 }
+else {
+    // We just send a 1 and then we can ignore it in the next step
+    Channel.from(1).set { fermi_bed }
+}
 
 if (params.run_intersections) {
     process download_masks {
@@ -162,8 +166,9 @@ if (params.run_intersections) {
             file 'LCR-hs37d5.bed.gz' into mask_lcr
 
         // We only need one core for this part
+        time '10m'
         clusterOptions = {
-            "-A $params.project -p core"
+            "-A $params.project -p core --qos=short"
         }
 
         """
@@ -179,9 +184,7 @@ if (params.run_intersections) {
             file 'mask_ceph.bed' from mask_ceph
             file 'mask_lcr.bed' from mask_lcr
         output:
-            file 'manta_masked*.bed'
-            file 'fermi_masked*.bed'
-            file 'combined*.bed'
+            file '*_masked*.bed'
 
         publishDir 'results'
 
@@ -194,6 +197,7 @@ if (params.run_intersections) {
         module "$params.modules.bedtools"
 
         """
+        ## Run masks
         cat manta.bed \
             | bedtools intersect -v -a stdin -b mask_lcr.bed -f 0.25 \
             | bedtools intersect -v -a stdin -b mask_ceph.bed -f 0.25 > manta_masked.bed
@@ -249,7 +253,6 @@ def infer_fastq_from_bam() {
 
 def infer_filename(from, match, replace) {
     path = from.replaceAll(match, replace)
-    println path
     if (file(path).exists()) {
         return path
     }
